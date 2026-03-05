@@ -38,30 +38,37 @@ class SettingsService extends ChangeNotifier {
   static final defaultTimeFormat = "H:mm";
   final SharedPreferences _sharedPreferences;
 
+  bool get appHighlightAnimationEnabled =>
+      _sharedPreferences.getBool(_appHighlightAnimationEnabledKey) ?? true;
 
-  bool get appHighlightAnimationEnabled => _sharedPreferences.getBool(_appHighlightAnimationEnabledKey) ?? true;
+  bool get appKeyClickEnabled =>
+      _sharedPreferences.getBool(_appKeyClickEnabledKey) ?? true;
 
-  bool get appKeyClickEnabled => _sharedPreferences.getBool(_appKeyClickEnabledKey) ?? true;
+  bool get autoHideAppBarEnabled =>
+      _sharedPreferences.getBool(_autoHideAppBar) ?? false;
 
-  bool get autoHideAppBarEnabled => _sharedPreferences.getBool(_autoHideAppBar) ?? false;
+  bool get showCategoryTitles =>
+      _sharedPreferences.getBool(_showCategoryTitles) ?? false;
 
-  bool get showCategoryTitles => _sharedPreferences.getBool(_showCategoryTitles) ?? true;
+  bool get showDateInStatusBar =>
+      _sharedPreferences.getBool(_showDateInStatusBar) ?? false;
 
-  bool get showDateInStatusBar => _sharedPreferences.getBool(_showDateInStatusBar) ?? true;
+  bool get showTimeInStatusBar =>
+      _sharedPreferences.getBool(_showTimeInStatusBar) ?? false;
 
-  bool get showTimeInStatusBar => _sharedPreferences.getBool(_showTimeInStatusBar) ?? true;
+  String? get gradientUuid => "e89f29f3-a0a3-4ee6-a363-5e9df2a124fd";
 
-  String? get gradientUuid => _sharedPreferences.getString(_gradientUuidKey);
+  String get backButtonAction =>
+      _sharedPreferences.getString(_backButtonAction) ??
+      BACK_BUTTON_ACTION_NOTHING;
 
-  String get backButtonAction => _sharedPreferences.getString(_backButtonAction) ?? BACK_BUTTON_ACTION_NOTHING;
+  String get dateFormat =>
+      _sharedPreferences.getString(_dateFormat) ?? defaultDateFormat;
 
-  String get dateFormat => _sharedPreferences.getString(_dateFormat) ?? defaultDateFormat;
+  String get timeFormat =>
+      _sharedPreferences.getString(_timeFormat) ?? defaultTimeFormat;
 
-  String get timeFormat => _sharedPreferences.getString(_timeFormat) ?? defaultTimeFormat;
-
-  SettingsService(
-    this._sharedPreferences
-  );
+  SettingsService(this._sharedPreferences);
 
   Future<void> set(String key, bool value) async {
     await _sharedPreferences.setBool(key, value);
@@ -90,7 +97,8 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setDateTimeFormat(String dateFormatString, String timeFormatString) async {
+  Future<void> setDateTimeFormat(
+      String dateFormatString, String timeFormatString) async {
     await Future.wait([
       _sharedPreferences.setString(_dateFormat, dateFormatString),
       _sharedPreferences.setString(_timeFormat, timeFormatString)
