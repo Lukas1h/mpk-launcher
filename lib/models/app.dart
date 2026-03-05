@@ -37,7 +37,7 @@ class App
     required this.name,
     required this.version,
     required this.hidden,
-    this.action = null
+    this.action,
   }):
     categoryOrders = Map(),
     sideloaded = false;

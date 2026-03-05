@@ -59,6 +59,7 @@ class AppsService extends ChangeNotifier {
     if (_database.wasCreated) {
       await _initDefaultCategories();
     }
+    await _addCustomShortcuts();
 
     _fLauncherChannel.addAppsChangedListener((event) async {
       switch (event["action"]) {
@@ -229,6 +230,47 @@ class AppsService extends ChangeNotifier {
 
     if (shouldNotifyListeners) {
       notifyListeners();
+    }
+  }
+
+  Future<void> _addCustomShortcuts() async {
+    // Clean up old shortcuts
+    await _database
+        .deleteApps(['flauncher.shortcut.wifi', 'flauncher.shortcut.bluetooth']);
+    _applications.remove('flauncher.shortcut.wifi');
+    _applications.remove('flauncher.shortcut.bluetooth');
+
+    const shortcutPackageName = 'flauncher.shortcut.settings';
+
+    final shortcutCompanion = AppsCompanion.insert(
+      packageName: shortcutPackageName,
+      name: 'Settings',
+      version: '1.0',
+    );
+    await _database.persistApps([shortcutCompanion]);
+
+    App? settingsShortcut = _applications[shortcutPackageName];
+    if (settingsShortcut == null) {
+      settingsShortcut = App(
+        packageName: shortcutPackageName,
+        name: 'Settings',
+        version: '1.0',
+        hidden: false,
+      );
+      _applications[shortcutPackageName] = settingsShortcut;
+    }
+
+    settingsShortcut.action = 'android.settings.SETTINGS';
+
+    if (_categoriesById.isNotEmpty) {
+      final firstCategory = _categoriesById.values.first;
+
+      final isAlreadyInCategory = firstCategory.applications
+          .any((app) => app.packageName == shortcutPackageName);
+      if (!isAlreadyInCategory) {
+        await addToCategory(settingsShortcut, firstCategory,
+            shouldNotifyListeners: false);
+      }
     }
   }
 
