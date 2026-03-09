@@ -56,6 +56,9 @@ class FLauncherChannel {
   Future<void> launchActivityByComponent(String component) async =>
       await _methodChannel.invokeMethod('launchActivityByComponent', component);
 
+  Future<void> openExternalMedia(String path) async =>
+      await _methodChannel.invokeMethod('openExternalMedia', path);
+
   Future<void> launchApp(String packageName) async =>
       await _methodChannel.invokeMethod('launchApp', packageName);
   Future<void> openBluetooth() async =>

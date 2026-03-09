@@ -16,9 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import 'dart:async';
-
-import 'package:flauncher/app_image_type.dart';
 import 'package:flauncher/providers/apps_service.dart';
 import 'package:flauncher/providers/settings_service.dart';
 import 'package:flauncher/widgets/application_info_panel.dart';
@@ -26,7 +23,6 @@ import 'package:flauncher/widgets/focus_keyboard_listener.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:tuple/tuple.dart';
 
 import '../models/app.dart';
 import '../models/category.dart';
@@ -60,7 +56,6 @@ class AppCard extends StatefulWidget {
 class _AppCardState extends State<AppCard> with SingleTickerProviderStateMixin {
   bool _moving = false;
 
-  late Future<Tuple2<AppImageType, ImageProvider>> _appImageLoadFuture;
   late final AnimationController _animation = AnimationController(
     vsync: this,
     lowerBound: 0,
@@ -75,8 +70,6 @@ class _AppCardState extends State<AppCard> with SingleTickerProviderStateMixin {
     super.initState();
 
     FocusManager.instance.addHighlightModeListener(_focusHighlightModeChanged);
-    _appImageLoadFuture =
-        _loadAppBannerOrIcon(Provider.of<AppsService>(context, listen: false));
   }
 
   @override
@@ -113,7 +106,7 @@ class _AppCardState extends State<AppCard> with SingleTickerProviderStateMixin {
                     InkWell(
                       autofocus: widget.autofocus,
                       focusColor: Colors.transparent,
-                      child: _appImage(),
+                      child: _appLabel(),
                       onTap: () =>
                           _onPressed(context, LogicalKeyboardKey.enter),
                       onLongPress: () =>
@@ -175,100 +168,18 @@ class _AppCardState extends State<AppCard> with SingleTickerProviderStateMixin {
         },
       );
 
-  Future<Tuple2<AppImageType, ImageProvider>> _loadAppBannerOrIcon(
-      AppsService service) async {
-    Uint8List bytes = Uint8List(0);
-
-    bytes = await service.getAppBanner(widget.application.packageName);
-    AppImageType type = AppImageType.Banner;
-
-    if (bytes.isEmpty) {
-      type = AppImageType.Icon;
-      bytes = await service.getAppIcon(widget.application.packageName);
-    }
-
-    return Tuple2(type, MemoryImage(bytes));
-  }
-
-  Widget _appImage() {
-    App app = widget.application;
-
-    if (app.packageName.startsWith('flauncher.shortcut.')) {
-      return Padding(
-        padding: const EdgeInsets.all(8),
+  Widget _appLabel() => Padding(
+        padding: const EdgeInsets.all(12),
         child: Center(
           child: Text(
-            app.name,
+            widget.application.name,
             style: Theme.of(context).textTheme.bodyMedium,
+            textAlign: TextAlign.center,
             overflow: TextOverflow.ellipsis,
             maxLines: 3,
           ),
         ),
       );
-    }
-
-    return FutureBuilder(
-        future: _appImageLoadFuture,
-        builder: (context, snapshot) {
-          if (snapshot.hasData) {
-            Tuple2<AppImageType, ImageProvider> tuple = snapshot.data!;
-
-            if (tuple.item1 == AppImageType.Banner) {
-              return Ink.image(image: tuple.item2, fit: BoxFit.cover);
-            } else {
-              return Padding(
-                padding: const EdgeInsets.all(8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: Ink.image(
-                        image: tuple.item2,
-                        height: double.maxFinite,
-                      ),
-                    ),
-                    Flexible(
-                      flex: 3,
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: Text(
-                          app.name,
-                          style: Theme.of(context).textTheme.bodySmall,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 3,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }
-          } else if (snapshot.hasError) {
-            return Padding(
-              padding: const EdgeInsets.all(8),
-              child: Center(
-                  child: Text(
-                app.name,
-                style: Theme.of(context).textTheme.bodySmall,
-                overflow: TextOverflow.ellipsis,
-                maxLines: 3,
-              )),
-            );
-          } else {
-            return const Padding(
-              padding: EdgeInsets.all(8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 0, width: 16),
-                  Text("Loading")
-                ],
-              ),
-            );
-          }
-        });
-  }
 
   void _focusHighlightModeChanged(FocusHighlightMode mode) {
     setState(() {});

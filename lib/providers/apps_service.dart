@@ -30,6 +30,9 @@ import '../models/app.dart';
 import '../models/category.dart';
 
 class AppsService extends ChangeNotifier {
+  static const _externalMediaShortcutPrefix =
+      'flauncher.shortcut.external_media.';
+
   final FLauncherChannel _fLauncherChannel;
   final FLauncherDatabase _database;
 
@@ -55,11 +58,9 @@ class AppsService extends ChangeNotifier {
   }
 
   Future<void> _init() async {
-    print("INITING!");
     await _refreshState(shouldNotifyListeners: false);
     if (_database.wasCreated) {
       await _initDefaultCategories();
-      print("INITING DEFAULT CATEGORIES!");
     }
     await _addCustomShortcuts();
 
@@ -106,9 +107,14 @@ class AppsService extends ChangeNotifier {
     _fLauncherChannel.addExternalMediaChangedListener((event) async {
       switch (event["name"]) {
         case "MEDIA_INSERTED":
+          String? mediaPath = event["path"];
+          if (mediaPath != null && mediaPath.isNotEmpty) {
+            await _addExternalMediaShortcut(mediaPath);
+          }
+          break;
         case "MEDIA_REMOVED":
-          print("MEDIA ADDED OR REMOVED!")
-          await _refreshState();
+          String? mediaPath = event["path"];
+          await _removeExternalMediaShortcuts(mediaPath: mediaPath);
           break;
       }
     });
@@ -131,21 +137,8 @@ class AppsService extends ChangeNotifier {
   }
 
   Future<void> _initDefaultCategories() {
-    final apps = _applications.values.where((application) =>
-        application.packageName == "me.zhanghai.android.files" ||
-        application.packageName == "com.android.tv.settings");
-
-    return _database.transaction(() async {
-      int categoryId = await addCategory("Apps",
-          type: CategoryType.grid,
-          shouldNotifyListeners: false,
-          columnsCount: 5);
-
-      Category tvAppsCategory = _categoriesById[categoryId]!;
-      for (final app in apps) {
-        await addToCategory(app, tvAppsCategory, shouldNotifyListeners: false);
-      }
-    });
+    return addCategory("Mobile Projector Kit",
+        type: CategoryType.grid, shouldNotifyListeners: false, columnsCount: 5);
   }
 
   Future<void> _refreshState({bool shouldNotifyListeners = true}) async {
@@ -170,6 +163,9 @@ class AppsService extends ChangeNotifier {
     final List<String> uninstalledApplications = [];
     for (App app in appsRemovedFromSystem) {
       String packageName = app.packageName;
+      if (packageName.startsWith('flauncher.shortcut.')) {
+        continue;
+      }
 
       // TODO: Is this really necessary? Can't we get this information from the getApplications method?
       bool appExists = await _fLauncherChannel.applicationExists(packageName);
@@ -252,8 +248,27 @@ class AppsService extends ChangeNotifier {
     _applications.remove('flauncher.shortcut.wifi');
     _applications.remove('flauncher.shortcut.bluetooth');
 
-    const settingsPackageName = 'flauncher.shortcut.settings';
+    const filesPackageName = 'flauncher.shortcut.files';
     var shortcutCompanion = AppsCompanion.insert(
+      packageName: filesPackageName,
+      name: 'Files',
+      version: '1.0',
+    );
+    await _database.persistApps([shortcutCompanion]);
+
+    App? filesShortcut = _applications[filesPackageName];
+    if (filesShortcut == null) {
+      filesShortcut = App(
+        packageName: filesPackageName,
+        name: 'Files',
+        version: '1.0',
+        hidden: false,
+      );
+      _applications[filesPackageName] = filesShortcut;
+    }
+
+    const settingsPackageName = 'flauncher.shortcut.settings';
+    shortcutCompanion = AppsCompanion.insert(
       packageName: settingsPackageName,
       name: 'Settings',
       version: '1.0',
@@ -297,7 +312,24 @@ class AppsService extends ChangeNotifier {
     if (_categoriesById.isNotEmpty) {
       final firstCategory = _categoriesById.values.first;
 
+      final nonShortcutPackageNames = firstCategory.applications
+          .where((app) => !app.packageName.startsWith('flauncher.shortcut.'))
+          .map((app) => app.packageName)
+          .toList();
+      for (final packageName in nonShortcutPackageNames) {
+        await _database.deleteAppCategory(firstCategory.id, packageName);
+      }
+      firstCategory.applications.removeWhere(
+          (app) => !app.packageName.startsWith('flauncher.shortcut.'));
+
       var isAlreadyInCategory = firstCategory.applications
+          .any((app) => app.packageName == filesPackageName);
+      if (!isAlreadyInCategory) {
+        await addToCategory(filesShortcut, firstCategory,
+            shouldNotifyListeners: false);
+      }
+
+      isAlreadyInCategory = firstCategory.applications
           .any((app) => app.packageName == settingsPackageName);
       if (!isAlreadyInCategory) {
         await addToCategory(settingsShortcut, firstCategory,
@@ -311,6 +343,93 @@ class AppsService extends ChangeNotifier {
             shouldNotifyListeners: false);
       }
     }
+  }
+
+  String _externalMediaPackageName(String path) =>
+      '$_externalMediaShortcutPrefix${path.hashCode.abs()}';
+
+  String _externalMediaName(String path) {
+    String normalized = path;
+    if (normalized.endsWith('/')) {
+      normalized = normalized.substring(0, normalized.length - 1);
+    }
+
+    int separatorIndex = normalized.lastIndexOf('/');
+    if (separatorIndex != -1 && separatorIndex < normalized.length - 1) {
+      return 'External Media ${normalized.substring(separatorIndex + 1)}';
+    }
+
+    return 'External Media';
+  }
+
+  Future<void> _addExternalMediaShortcut(String path) async {
+    String packageName = _externalMediaPackageName(path);
+    String shortcutName = _externalMediaName(path);
+    AppsCompanion shortcutCompanion = AppsCompanion.insert(
+      packageName: packageName,
+      name: shortcutName,
+      version: path,
+    );
+    await _database.persistApps([shortcutCompanion]);
+
+    App? mediaShortcut = _applications[packageName];
+    if (mediaShortcut == null) {
+      mediaShortcut = App(
+        packageName: packageName,
+        name: shortcutName,
+        version: path,
+        hidden: false,
+      );
+      _applications[packageName] = mediaShortcut;
+    }
+    mediaShortcut.data = path;
+
+    if (_categoriesById.isNotEmpty) {
+      final firstCategory = _categoriesById.values.first;
+
+      bool isAlreadyInCategory = firstCategory.applications
+          .any((app) => app.packageName == packageName);
+      if (!isAlreadyInCategory) {
+        await addToCategory(mediaShortcut, firstCategory,
+            shouldNotifyListeners: false);
+      }
+    }
+
+    notifyListeners();
+  }
+
+  Future<void> _removeExternalMediaShortcuts({String? mediaPath}) async {
+    List<String> packageNames;
+    if (mediaPath == null || mediaPath.isEmpty) {
+      packageNames = _applications.keys
+          .where((packageName) =>
+              packageName.startsWith(_externalMediaShortcutPrefix))
+          .toList();
+    } else {
+      packageNames = [_externalMediaPackageName(mediaPath)];
+    }
+
+    if (packageNames.isEmpty) {
+      return;
+    }
+
+    await _database.deleteApps(packageNames);
+
+    for (String packageName in packageNames) {
+      App? application = _applications.remove(packageName);
+      if (application == null) {
+        continue;
+      }
+
+      for (int categoryId in application.categoryOrders.keys) {
+        if (_categoriesById.containsKey(categoryId)) {
+          Category category = _categoriesById[categoryId]!;
+          category.applications.remove(application);
+        }
+      }
+    }
+
+    notifyListeners();
   }
 
   void sortCategory(Category category) {
@@ -331,10 +450,17 @@ class AppsService extends ChangeNotifier {
   }
 
   Future<void> launchApp(App app) {
-    print("Launching app " + app.packageName);
+    if (app.packageName == "flauncher.shortcut.files") {
+      return _fLauncherChannel.launchApp("me.zhanghai.android.files");
+    }
     if (app.packageName == "flauncher.shortcut.bluetooth_add") {
-      print("Launching bluetooth! ");
       return _fLauncherChannel.openBluetooth();
+    }
+    if (app.packageName.startsWith(_externalMediaShortcutPrefix)) {
+      String mediaPath = app.data ?? app.version;
+      if (mediaPath.isNotEmpty && mediaPath != '1.0') {
+        return _fLauncherChannel.openExternalMedia(mediaPath);
+      }
     }
     if (app.component != null) {
       return _fLauncherChannel.launchActivityByComponent(app.component!);

@@ -29,6 +29,7 @@ import android.graphics.drawable.Drawable;
 import android.net.ConnectivityManager;
 import android.net.Uri;
 import android.os.Build;
+import android.os.StrictMode;
 import android.provider.Settings;
 import android.util.Pair;
 import android.util.Log;
@@ -42,6 +43,7 @@ import io.flutter.plugin.common.EventChannel;
 import io.flutter.plugin.common.MethodChannel;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -77,6 +79,7 @@ public class MainActivity extends FlutterActivity
                 case "applicationExists" -> result.success(applicationExists(call.arguments()));
                 case "launchActivityFromAction" -> result.success(launchActivityFromAction((String) call.arguments()));
                 case "launchActivityByComponent" -> result.success(launchActivityByComponent((String) call.arguments()));
+                case "openExternalMedia" -> result.success(openExternalMedia((String) call.arguments()));
                 case "launchApp" -> result.success(launchApp(call.arguments()));
                 case "openBluetooth" -> result.success(openBluetooth());
                 case "openSettings" -> result.success(openSettings());
@@ -310,6 +313,48 @@ public class MainActivity extends FlutterActivity
         Intent intent = new Intent();
         intent.setComponent(ComponentName.unflattenFromString(component));
         return tryStartActivity(intent);
+    }
+
+    private boolean openExternalMedia(String path) {
+        if (path == null || path.isBlank()) {
+            Log.w("flauncher", "openExternalMedia called with empty path");
+            return false;
+        }
+
+        Uri uri = Uri.parse(path);
+        if (uri.getScheme() == null) {
+            uri = Uri.fromFile(new File(path));
+        }
+
+        Log.i("flauncher", "Opening external media path: " + path);
+        Log.i("flauncher", "Opening external media uri: " + uri);
+
+        Intent intent = new Intent(Intent.ACTION_VIEW)
+                .setDataAndType(uri, "resource/folder")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+        boolean success = tryStartActivityAllowingFileUri(intent);
+        if (!success) {
+            Log.e("flauncher", "Failed to open external media uri: " + uri);
+        }
+        return success;
+    }
+
+    private boolean tryStartActivityAllowingFileUri(Intent intent)
+    {
+        StrictMode.VmPolicy oldPolicy = StrictMode.getVmPolicy();
+        StrictMode.setVmPolicy(new StrictMode.VmPolicy.Builder().build());
+        try {
+            startActivity(intent);
+            return true;
+        }
+        catch (Exception ex) {
+            Log.e("flauncher", "Failed to start activity for intent: " + intent, ex);
+            return false;
+        }
+        finally {
+            StrictMode.setVmPolicy(oldPolicy);
+        }
     }
 
     private boolean launchApp(String packageName) {
