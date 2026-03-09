@@ -18,6 +18,7 @@
 
 plugins {
     id "com.android.application"
+    id "org.jetbrains.kotlin.android"
     id "dev.flutter.flutter-gradle-plugin"
 }
 
@@ -43,6 +44,8 @@ def secretProperties = new Properties()
 secretProperties.setProperty("signing_keystore_password", "${System.getenv('FLAUNCHER_KEYSTORE_PASSWORD')}")
 secretProperties.setProperty("signing_key_password", "${System.getenv('FLAUNCHER_SIGNING_KEY_PASSWORD')}")
 secretProperties.setProperty("signing_key_alias", "${System.getenv('FLAUNCHER_SIGNING_KEY_ALIAS')}")
+def releaseKeystoreFile = file("upload-keystore.jks")
+def hasReleaseKeystore = releaseKeystoreFile.exists()
 
 android {
     defaultConfig {
@@ -57,7 +60,7 @@ android {
     signingConfigs {
         debug {}
         release {
-            storeFile file("upload-keystore.jks")
+            storeFile releaseKeystoreFile
             storePassword "${secretProperties['signing_keystore_password']}"
             keyAlias "${secretProperties['signing_key_alias']}"
             keyPassword "${secretProperties['signing_key_password']}"
@@ -72,7 +75,7 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.release
+            signingConfig hasReleaseKeystore ? signingConfigs.release : signingConfigs.debug
         }
     }
 

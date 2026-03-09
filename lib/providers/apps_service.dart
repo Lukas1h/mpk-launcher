@@ -243,10 +243,14 @@ class AppsService extends ChangeNotifier {
 
   Future<void> _addCustomShortcuts() async {
     // Clean up old shortcuts
-    await _database.deleteApps(
-        ['flauncher.shortcut.wifi', 'flauncher.shortcut.bluetooth']);
+    await _database.deleteApps([
+      'flauncher.shortcut.wifi',
+      'flauncher.shortcut.bluetooth',
+      'flauncher.shortcut.settings'
+    ]);
     _applications.remove('flauncher.shortcut.wifi');
     _applications.remove('flauncher.shortcut.bluetooth');
+    _applications.remove('flauncher.shortcut.settings');
 
     const filesPackageName = 'flauncher.shortcut.files';
     var shortcutCompanion = AppsCompanion.insert(
@@ -266,26 +270,6 @@ class AppsService extends ChangeNotifier {
       );
       _applications[filesPackageName] = filesShortcut;
     }
-
-    const settingsPackageName = 'flauncher.shortcut.settings';
-    shortcutCompanion = AppsCompanion.insert(
-      packageName: settingsPackageName,
-      name: 'Settings',
-      version: '1.0',
-    );
-    await _database.persistApps([shortcutCompanion]);
-
-    App? settingsShortcut = _applications[settingsPackageName];
-    if (settingsShortcut == null) {
-      settingsShortcut = App(
-        packageName: settingsPackageName,
-        name: 'Settings',
-        version: '1.0',
-        hidden: false,
-      );
-      _applications[settingsPackageName] = settingsShortcut;
-    }
-    settingsShortcut.action = 'android.settings.SETTINGS';
 
     // Bluetooth shortcut
     const bluetoothPackageName = 'flauncher.shortcut.bluetooth_add';
@@ -330,13 +314,6 @@ class AppsService extends ChangeNotifier {
       }
 
       isAlreadyInCategory = firstCategory.applications
-          .any((app) => app.packageName == settingsPackageName);
-      if (!isAlreadyInCategory) {
-        await addToCategory(settingsShortcut, firstCategory,
-            shouldNotifyListeners: false);
-      }
-
-      isAlreadyInCategory = firstCategory.applications
           .any((app) => app.packageName == bluetoothPackageName);
       if (!isAlreadyInCategory) {
         await addToCategory(bluetoothShortcut, firstCategory,
@@ -347,6 +324,12 @@ class AppsService extends ChangeNotifier {
 
   String _externalMediaPackageName(String path) =>
       '$_externalMediaShortcutPrefix${path.hashCode.abs()}';
+
+  bool _isInternalStoragePath(String path) =>
+      path == '/storage/emulated/0' ||
+      path.startsWith('/storage/emulated/0/') ||
+      path == '/storage/self/primary' ||
+      path.startsWith('/storage/self/primary/');
 
   String _externalMediaName(String path) {
     String normalized = path;
@@ -363,6 +346,11 @@ class AppsService extends ChangeNotifier {
   }
 
   Future<void> _addExternalMediaShortcut(String path) async {
+    if (_isInternalStoragePath(path)) {
+      await _removeExternalMediaShortcuts(mediaPath: path);
+      return;
+    }
+
     String packageName = _externalMediaPackageName(path);
     String shortcutName = _externalMediaName(path);
     AppsCompanion shortcutCompanion = AppsCompanion.insert(
@@ -433,11 +421,28 @@ class AppsService extends ChangeNotifier {
   }
 
   void sortCategory(Category category) {
+    int externalMediaRank(App application) =>
+        application.packageName.startsWith(_externalMediaShortcutPrefix)
+            ? 0
+            : 1;
+
     if (category.sort == CategorySort.alphabetical) {
-      category.applications.sortBy((application) => application.name);
+      category.applications.sort((a, b) {
+        int rankCompare = externalMediaRank(a).compareTo(externalMediaRank(b));
+        if (rankCompare != 0) {
+          return rankCompare;
+        }
+        return a.name.compareTo(b.name);
+      });
     } else {
-      category.applications.sortBy<num>(
-          (application) => application.categoryOrders[category.id]!);
+      category.applications.sort((a, b) {
+        int rankCompare = externalMediaRank(a).compareTo(externalMediaRank(b));
+        if (rankCompare != 0) {
+          return rankCompare;
+        }
+        return a.categoryOrders[category.id]!
+            .compareTo(b.categoryOrders[category.id]!);
+      });
     }
   }
 

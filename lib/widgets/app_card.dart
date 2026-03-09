@@ -32,6 +32,9 @@ const _validationKeys = [
   LogicalKeyboardKey.enter,
   LogicalKeyboardKey.gameButtonA
 ];
+const _externalMediaShortcutPrefix = 'flauncher.shortcut.external_media.';
+const _filesShortcutPackage = 'flauncher.shortcut.files';
+const _bluetoothShortcutPackage = 'flauncher.shortcut.bluetooth_add';
 
 class AppCard extends StatefulWidget {
   final App application;
@@ -87,6 +90,11 @@ class _AppCardState extends State<AppCard> with SingleTickerProviderStateMixin {
         onLongPress: (key) => _onLongPress(context, key),
         builder: (context) {
           final bool shouldHighlight = _shouldHighlight(context);
+          final bool isExternalMediaShortcut = widget.application.packageName
+              .startsWith(_externalMediaShortcutPrefix);
+          final Color backgroundColor = isExternalMediaShortcut
+              ? Theme.of(context).colorScheme.tertiaryContainer
+              : Theme.of(context).cardColor;
 
           return AspectRatio(
             aspectRatio: 16 / 9,
@@ -96,6 +104,7 @@ class _AppCardState extends State<AppCard> with SingleTickerProviderStateMixin {
               transformAlignment: Alignment.center,
               transform: _scaleTransform(context),
               child: Material(
+                color: backgroundColor,
                 borderRadius: BorderRadius.circular(8),
                 clipBehavior: Clip.antiAlias,
                 elevation: shouldHighlight ? 16 : 0,
@@ -168,18 +177,94 @@ class _AppCardState extends State<AppCard> with SingleTickerProviderStateMixin {
         },
       );
 
-  Widget _appLabel() => Padding(
-        padding: const EdgeInsets.all(12),
-        child: Center(
-          child: Text(
-            widget.application.name,
-            style: Theme.of(context).textTheme.bodyMedium,
-            textAlign: TextAlign.center,
-            overflow: TextOverflow.ellipsis,
-            maxLines: 3,
-          ),
+  Widget _appLabel() {
+    final String packageName = widget.application.packageName;
+    final bool isExternalMediaShortcut =
+        packageName.startsWith(_externalMediaShortcutPrefix);
+    final Color? textColor = isExternalMediaShortcut
+        ? Theme.of(context).colorScheme.onTertiaryContainer
+        : null;
+    final String subtitleName = widget.application.name
+        .replaceFirst(RegExp(r'^External Media\s*'), '')
+        .trim();
+    final Color? subtitleColor = isExternalMediaShortcut
+        ? Theme.of(context).colorScheme.onTertiaryContainer.withOpacity(0.75)
+        : null;
+    final IconData? shortcutIcon = _shortcutIcon(packageName);
+    final String label = _shortcutLabel(packageName);
+
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isExternalMediaShortcut) ...[
+              Icon(Icons.usb_rounded, size: 22, color: textColor),
+              const SizedBox(height: 8),
+              Text(
+                'External Media',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: textColor,
+                    ),
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+              if (subtitleName.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  subtitleName,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: subtitleColor,
+                      ),
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ],
+            ] else ...[
+              if (shortcutIcon != null) ...[
+                Icon(shortcutIcon, size: 22, color: textColor),
+                const SizedBox(height: 8),
+              ],
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: textColor,
+                    ),
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 3,
+              ),
+            ],
+          ],
         ),
-      );
+      ),
+    );
+  }
+
+  IconData? _shortcutIcon(String packageName) {
+    switch (packageName) {
+      case _filesShortcutPackage:
+        return Icons.folder_rounded;
+      case _bluetoothShortcutPackage:
+        return Icons.bluetooth_rounded;
+      default:
+        return null;
+    }
+  }
+
+  String _shortcutLabel(String packageName) {
+    switch (packageName) {
+      case _filesShortcutPackage:
+        return 'Files';
+      case _bluetoothShortcutPackage:
+        return 'Bluetooth';
+      default:
+        return widget.application.name;
+    }
+  }
 
   void _focusHighlightModeChanged(FocusHighlightMode mode) {
     setState(() {});

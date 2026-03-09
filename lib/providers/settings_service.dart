@@ -39,7 +39,7 @@ class SettingsService extends ChangeNotifier {
   final SharedPreferences _sharedPreferences;
 
   bool get appHighlightAnimationEnabled =>
-      _sharedPreferences.getBool(_appHighlightAnimationEnabledKey) ?? false;
+      _sharedPreferences.getBool(_appHighlightAnimationEnabledKey) ?? true;
 
   bool get appKeyClickEnabled =>
       _sharedPreferences.getBool(_appKeyClickEnabledKey) ?? true;
