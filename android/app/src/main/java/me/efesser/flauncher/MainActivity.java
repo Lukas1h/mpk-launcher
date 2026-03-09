@@ -18,6 +18,7 @@
 
 package me.efesser.flauncher;
 
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.*;
@@ -30,6 +31,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
 import android.util.Pair;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 
@@ -57,6 +59,7 @@ public class MainActivity extends FlutterActivity
     private final String METHOD_CHANNEL = "me.efesser.flauncher/method";
     private final String APPS_EVENT_CHANNEL = "me.efesser.flauncher/event_apps";
     private final String NETWORK_EVENT_CHANNEL = "me.efesser.flauncher/event_network";
+    private final String EXTERNAL_MEDIA_EVENT_CHANNEL = "me.efesser.flauncher/event_external_media";
 
     @Override
     public void configureFlutterEngine(@NonNull FlutterEngine flutterEngine)
@@ -72,8 +75,10 @@ public class MainActivity extends FlutterActivity
                 case "getApplicationBanner" -> result.success(getApplicationBanner(call.arguments()));
                 case "getApplicationIcon" -> result.success(getApplicationIcon(call.arguments()));
                 case "applicationExists" -> result.success(applicationExists(call.arguments()));
-                case "launchActivityFromAction" -> result.success(launchActivityFromAction(call.arguments()));
+                case "launchActivityFromAction" -> result.success(launchActivityFromAction((String) call.arguments()));
+                case "launchActivityByComponent" -> result.success(launchActivityByComponent((String) call.arguments()));
                 case "launchApp" -> result.success(launchApp(call.arguments()));
+                case "openBluetooth" -> result.success(openBluetooth());
                 case "openSettings" -> result.success(openSettings());
                 case "openAppInfo" -> result.success(openAppInfo(call.arguments()));
                 case "uninstallApp" -> result.success(uninstallApp(call.arguments()));
@@ -90,6 +95,9 @@ public class MainActivity extends FlutterActivity
 
         new EventChannel(messenger, NETWORK_EVENT_CHANNEL).setStreamHandler(
                 new NetworkEventStreamHandler(this));
+
+        new EventChannel(messenger, EXTERNAL_MEDIA_EVENT_CHANNEL).setStreamHandler(
+                new ExternalMediaEventStreamHandler(this));
     }
 
     private List<Map<String, Serializable>> getApplications() {
@@ -295,6 +303,15 @@ public class MainActivity extends FlutterActivity
         return tryStartActivity(new Intent(action));
     }
 
+    private boolean launchActivityByComponent(String component) {
+        if (component == null) {
+            return false;
+        }
+        Intent intent = new Intent();
+        intent.setComponent(ComponentName.unflattenFromString(component));
+        return tryStartActivity(intent);
+    }
+
     private boolean launchApp(String packageName) {
         PackageManager packageManager = getPackageManager();
         Intent intent = packageManager.getLeanbackLaunchIntentForPackage(packageName);
@@ -304,6 +321,10 @@ public class MainActivity extends FlutterActivity
         }
 
         return tryStartActivity(intent);
+    }
+
+    private boolean openBluetooth() {
+        return launchApp("com.saihgupr.btcontrol");
     }
 
     private boolean openSettings() {

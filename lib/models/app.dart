@@ -31,6 +31,7 @@ class App
   Map<int, int> categoryOrders;
 
   String? action;
+  String? component;
 
   App({
     required this.packageName,
@@ -38,6 +39,7 @@ class App
     required this.version,
     required this.hidden,
     this.action,
+    this.component,
   }):
     categoryOrders = Map(),
     sideloaded = false;

@@ -55,9 +55,11 @@ class AppsService extends ChangeNotifier {
   }
 
   Future<void> _init() async {
+    print("INITING!");
     await _refreshState(shouldNotifyListeners: false);
     if (_database.wasCreated) {
       await _initDefaultCategories();
+      print("INITING DEFAULT CATEGORIES!");
     }
     await _addCustomShortcuts();
 
@@ -99,6 +101,16 @@ class AppsService extends ChangeNotifier {
       }
 
       notifyListeners();
+    });
+
+    _fLauncherChannel.addExternalMediaChangedListener((event) async {
+      switch (event["name"]) {
+        case "MEDIA_INSERTED":
+        case "MEDIA_REMOVED":
+          print("MEDIA ADDED OR REMOVED!")
+          await _refreshState();
+          break;
+      }
     });
 
     _initialized = true;
@@ -235,40 +247,67 @@ class AppsService extends ChangeNotifier {
 
   Future<void> _addCustomShortcuts() async {
     // Clean up old shortcuts
-    await _database
-        .deleteApps(['flauncher.shortcut.wifi', 'flauncher.shortcut.bluetooth']);
+    await _database.deleteApps(
+        ['flauncher.shortcut.wifi', 'flauncher.shortcut.bluetooth']);
     _applications.remove('flauncher.shortcut.wifi');
     _applications.remove('flauncher.shortcut.bluetooth');
 
-    const shortcutPackageName = 'flauncher.shortcut.settings';
-
-    final shortcutCompanion = AppsCompanion.insert(
-      packageName: shortcutPackageName,
+    const settingsPackageName = 'flauncher.shortcut.settings';
+    var shortcutCompanion = AppsCompanion.insert(
+      packageName: settingsPackageName,
       name: 'Settings',
       version: '1.0',
     );
     await _database.persistApps([shortcutCompanion]);
 
-    App? settingsShortcut = _applications[shortcutPackageName];
+    App? settingsShortcut = _applications[settingsPackageName];
     if (settingsShortcut == null) {
       settingsShortcut = App(
-        packageName: shortcutPackageName,
+        packageName: settingsPackageName,
         name: 'Settings',
         version: '1.0',
         hidden: false,
       );
-      _applications[shortcutPackageName] = settingsShortcut;
+      _applications[settingsPackageName] = settingsShortcut;
     }
-
     settingsShortcut.action = 'android.settings.SETTINGS';
+
+    // Bluetooth shortcut
+    const bluetoothPackageName = 'flauncher.shortcut.bluetooth_add';
+    shortcutCompanion = AppsCompanion.insert(
+      packageName: bluetoothPackageName,
+      name: 'Bluetooth',
+      version: '1.0',
+    );
+    await _database.persistApps([shortcutCompanion]);
+
+    App? bluetoothShortcut = _applications[bluetoothPackageName];
+    if (bluetoothShortcut == null) {
+      bluetoothShortcut = App(
+        packageName: bluetoothPackageName,
+        name: 'Bluetooth',
+        version: '1.0',
+        hidden: false,
+      );
+      _applications[bluetoothPackageName] = bluetoothShortcut;
+    }
+    bluetoothShortcut.component =
+        'com.android.tv.settings/.accessories.AddAccessoryActivity';
 
     if (_categoriesById.isNotEmpty) {
       final firstCategory = _categoriesById.values.first;
 
-      final isAlreadyInCategory = firstCategory.applications
-          .any((app) => app.packageName == shortcutPackageName);
+      var isAlreadyInCategory = firstCategory.applications
+          .any((app) => app.packageName == settingsPackageName);
       if (!isAlreadyInCategory) {
         await addToCategory(settingsShortcut, firstCategory,
+            shouldNotifyListeners: false);
+      }
+
+      isAlreadyInCategory = firstCategory.applications
+          .any((app) => app.packageName == bluetoothPackageName);
+      if (!isAlreadyInCategory) {
+        await addToCategory(bluetoothShortcut, firstCategory,
             shouldNotifyListeners: false);
       }
     }
@@ -292,14 +331,18 @@ class AppsService extends ChangeNotifier {
   }
 
   Future<void> launchApp(App app) {
-    Future<void> future;
-    if (app.action == null) {
-      future = _fLauncherChannel.launchApp(app.packageName);
-    } else {
-      future = _fLauncherChannel.launchActivityFromAction(app.action!);
+    print("Launching app " + app.packageName);
+    if (app.packageName == "flauncher.shortcut.bluetooth_add") {
+      print("Launching bluetooth! ");
+      return _fLauncherChannel.openBluetooth();
     }
-
-    return future;
+    if (app.component != null) {
+      return _fLauncherChannel.launchActivityByComponent(app.component!);
+    } else if (app.action != null) {
+      return _fLauncherChannel.launchActivityFromAction(app.action!);
+    } else {
+      return _fLauncherChannel.launchApp(app.packageName);
+    }
   }
 
   Future<void> openAppInfo(App app) =>
