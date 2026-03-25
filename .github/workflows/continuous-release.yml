@@ -47,7 +47,7 @@ jobs:
         run: |
           sudo apt install rename -y
           echo -n "$KEYSTORE_FILE_BASE64" | base64 -d > android/app/upload-keystore.jks
-          flutter --no-color build apk --release --build-number $BUILD_NUMBER --build-name=$FULL_VERSION_NUMBER
+          flutter --no-color build apk --debug --build-number $BUILD_NUMBER --build-name=$FULL_VERSION_NUMBER
           file-rename 's/app-(.*)-release.apk/flauncher-$1-release.apk/' $OUTPUT_DIR/*.apk
           mv $OUTPUT_DIR/app-release.apk $OUTPUT_DIR/flauncher-universal-release.apk
       - name: Upload APKs as artifact
